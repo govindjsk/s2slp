@@ -1,3 +1,4 @@
+import argparse
 import math
 import networkx as nx
 import numpy as np
@@ -150,12 +151,24 @@ def filter_on_gcc(raw_data, silent = False):
                                                         *raw_data_gcc.B.shape, raw_data_gcc.B.nnz))
     return raw_data_gcc
 
+def init_args():
+    parser = argparse.ArgumentParser(description='Data Preparer for S2SLP')
+    parser.add_argument('--data-home', default='/home2/e1-313-15477/govind/s2slp/data/', help='network path')
+    parser.add_argument('--data-name', default='mag-acm-full', help='network name')
+    parser.add_argument('--max-train-num', type=int, default=100000, 
+                        help='set maximum number of train links (to fit into memory)')
+    parser.add_argument('--no-cuda', action='store_true', default=True,
+                        help='disables CUDA training')
+    parser.add_argument('--test-ratio', type=float, default=0.5, help='ratio of test links')
+    parser.add_argument('--num-exp', type=int, default=10, help='number of experiments for statistical significance')
+    parser.add_argument('--gcc', action='store_true', default=False, help='whether or not to go with GCC')
+    parser.add_argument('--silent', action='store_true', default=False, help='whether or not to go with GCC')
+    args = parser.parse_args()
+    return args
+
 def main():
-    data_home = '/home2/e1-313-15477/govind/s2slp/data/'
-    data_name = 'main_data'
-#     data_name = 'sample_data'
-    data_path = os.path.join(data_home, data_name)
-    num_experiments = 10
+    args = init_args()
+    data_path = os.path.join(args.data_home, args.data_name)
     raw_data_params = {'home_path': data_path,
                        'r_label_file': 'id_p_map.txt',
                        'u_label_file': 'id_a_map.txt',
@@ -163,16 +176,16 @@ def main():
                        'r_u_list_file': 'p_a_list_train.txt',
                        'r_v_list_file': 'p_k_list_train.txt',
                        'emb_pkl_file': 'nodevectors.pkl',
-                       'gcc': True}
-    s2slp_data_params = {'test_ratio': 0.3,
-                         'max_train_num': None
+                       'gcc': args.gcc}
+    s2slp_data_params = {'test_ratio': args.test_ratio,
+                         'max_train_num': args.max_train_num
                          }
 
-    raw_data = read_raw_data(raw_data_params, silent = silent_flag)
-    pickle.dump(raw_data, open(os.path.join(data_path, '{}.raw'.format(data_name)), 'wb'))
-    for i in tqdm(range(num_experiments)):
-        s2slp_data = prepare_s2slp_data(raw_data, s2slp_data_params, silent = silent_flag)
-        pickle.dump(s2slp_data, open(os.path.join(data_path, '{}.{}.s2slp'.format(data_name, i)), 'wb'))
+    raw_data = read_raw_data(raw_data_params, silent = args.silent)
+    pickle.dump(raw_data, open(os.path.join(data_path, '{}.raw'.format(args.data_name)), 'wb'))
+    for i in tqdm(range(args.num_exp)):
+        s2slp_data = prepare_s2slp_data(raw_data, s2slp_data_params, silent = args.silent)
+        pickle.dump(s2slp_data, open(os.path.join(data_path, '{}.{}.s2slp'.format(args.data_name, i)), 'wb'))
 
 
 if __name__ == '__main__':
