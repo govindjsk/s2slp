@@ -1,4 +1,5 @@
 import math
+import networkx as nx
 import numpy as np
 import os
 import pandas as pd
@@ -10,7 +11,7 @@ from collections import namedtuple
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
-silent_flag = False
+silent_flag = True
 RawData = namedtuple('RawData', ['S', 'S_', 'B'])
 S2SLPData = namedtuple('S2SLPData', ['S', 'S_', 'B',
                                      'train_pos', 'train_neg',
@@ -101,6 +102,8 @@ def read_raw_data(raw_data_params, silent = False):
               "\tB : {}x{} (nnz={})\n".format(*data.S.shape, data.S.nnz,
                                                         *data.S_.shape, data.S_.nnz,
                                                         *data.B.shape, data.B.nnz))
+    if raw_data_params['gcc']:
+        data = filter_on_gcc(data, silent = silent)
     return data
 
 def prepare_s2slp_data(raw_data, s2slp_data_params, silent = False):
@@ -108,8 +111,6 @@ def prepare_s2slp_data(raw_data, s2slp_data_params, silent = False):
                                                               s2slp_data_params['max_train_num'])
     A = raw_data.B.copy()
     A[test_pos[0], test_pos[1]] = 0  # mask test links
-#     for i, j in zip(*test_pos):
-#         A[i, j] = 0  # mask test links
     A.eliminate_zeros()
     s2slp_data = S2SLPData(raw_data.S, raw_data.S_, A,
                            train_pos, train_neg, test_pos, test_neg,
@@ -126,6 +127,29 @@ def prepare_s2slp_data(raw_data, s2slp_data_params, silent = False):
     return s2slp_data
 
 
+def filter_on_gcc(raw_data, silent = False):
+    S, S_, B = raw_data
+    G = nx.bipartite.from_biadjacency_matrix(B)
+    ccs = nx.connected_components(G)
+    gcc = max(ccs, key = lambda x: len(x))
+    gcc, gcc_ = list(sorted({x for x in gcc if x < B.shape[0]})), \
+                list(sorted({x-B.shape[0] for x in gcc if x >= B.shape[0]}))
+    set_gcc, set_gcc_ = set(gcc), set(gcc_)
+    B = B[gcc, :][:, gcc_]
+    S = S[:, gcc]
+    S = S[(S.sum(axis=1) != 0).nonzero()[0], :]
+    S_ = S_[:, gcc_]
+    S_ = S_[(S_.sum(axis=1) != 0).nonzero()[0], :]
+    raw_data_gcc = RawData(S, S_, B)
+    if not silent:
+        print("Filtering on GCC...")
+        print("Data:\n\tS : {}x{} (nnz={})\n"
+              "\tS': {}x{} (nnz={})\n"
+              "\tB : {}x{} (nnz={})\n".format(*raw_data_gcc.S.shape, raw_data_gcc.S.nnz,
+                                                        *raw_data_gcc.S_.shape, raw_data_gcc.S_.nnz,
+                                                        *raw_data_gcc.B.shape, raw_data_gcc.B.nnz))
+    return raw_data_gcc
+
 def main():
     data_home = '/home2/e1-313-15477/govind/s2slp/data/'
     data_name = 'main_data'
@@ -133,14 +157,16 @@ def main():
     data_path = os.path.join(data_home, data_name)
     num_experiments = 10
     raw_data_params = {'home_path': data_path,
-                   'r_label_file': 'id_p_map.txt',
-                   'u_label_file': 'id_a_map.txt',
-                   'v_label_file': 'id_k_map.txt',
-                   'r_u_list_file': 'p_a_list_train.txt',
-                   'r_v_list_file': 'p_k_list_train.txt',
-                   'emb_pkl_file': 'nodevectors.pkl'}
-    s2slp_data_params = {'test_ratio': 0.1,
-                         'max_train_num': None}
+                       'r_label_file': 'id_p_map.txt',
+                       'u_label_file': 'id_a_map.txt',
+                       'v_label_file': 'id_k_map.txt',
+                       'r_u_list_file': 'p_a_list_train.txt',
+                       'r_v_list_file': 'p_k_list_train.txt',
+                       'emb_pkl_file': 'nodevectors.pkl',
+                       'gcc': True}
+    s2slp_data_params = {'test_ratio': 0.3,
+                         'max_train_num': None
+                         }
 
     raw_data = read_raw_data(raw_data_params, silent = silent_flag)
     pickle.dump(raw_data, open(os.path.join(data_path, '{}.raw'.format(data_name)), 'wb'))
