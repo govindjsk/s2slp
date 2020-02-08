@@ -24,18 +24,18 @@ def get_auc_scores(df):
     return auc_scores
 
 def get_lp_scores(v, v_, nbrs, nbrs_):
-    nbrs_v = nbrs.get(v, set()) # Subset of V'
+    nbrs_v = set(nbrs.get(v, set())) # Subset of V'
     nbrs_v.discard(v_)
 
     nbrs_nbrs_v = set() # Subset of V
     for nv in nbrs_v: # n_v is an element of V'
-        nbrs_nv = nbrs_[nv] # Subset of V
+        nbrs_nv = set(nbrs_[nv]) # Subset of V
         nbrs_nbrs_v.update(nbrs_nv)
-    nbrs_v_ = nbrs_.get(v_, set()) # Subset of V
+    nbrs_v_ = set(nbrs_.get(v_, set())) # Subset of V
     nbrs_v_.discard(v)
     nbrs_nbrs_v_ = set() # Subset of V'
     for nv_ in nbrs_v_: # n_v_ is an element of V
-        nbrs_nv_ = nbrs[nv_] # Subset of V'
+        nbrs_nv_ = set(nbrs[nv_]) # Subset of V'
         nbrs_nbrs_v_.update(nbrs_nv_)
     cn = nbrs_nbrs_v.intersection(nbrs_v_)
     cn_ = nbrs_nbrs_v_.intersection(nbrs_v)
@@ -67,7 +67,8 @@ def predict_links(prepared_data_params):
             result.update({'B_{}'.format(a): s for a, s in scores.items()})
 
             result.update({'A_{}'.format(a): [] for a in scores})
-            f_v, f_v_ = elements[v], elements_[v_] # Set of nodes incident to hyperedge ids v and v_
+            f_v = set(elements[v])
+            f_v_=set(elements_[v_]) # Set of nodes incident to hyperedge ids v and v_
             count = 0
             for i, j in product(f_v, f_v_): # i \in f_v, j \in f_v_
                 scores = get_lp_scores(i, j, A_nbrs, A_nbrs_)
@@ -82,9 +83,10 @@ def predict_links(prepared_data_params):
             results.update({(v, v_): result})
         df = pd.DataFrame(results).T
         return df
-    
-    test_df = calculate_lp_scores(test_pairs, test_labels)
     train_df = calculate_lp_scores(train_pairs, train_labels)
+    test_df = calculate_lp_scores(test_pairs, test_labels)
+    
+    
     return train_df, test_df
 
 def get_perf_results(data_home, data_name, num_exp, silent = False):
