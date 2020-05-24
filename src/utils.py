@@ -1,9 +1,12 @@
-import numpy as np
-from collections import defaultdict
-import tqdm
-from matplotlib import pyplot as plt
+import errno    
 import networkx as nx
+import numpy as np
+import os
 import random
+import tqdm
+
+from collections import defaultdict
+from matplotlib import pyplot as plt
 
 MAX_DISPLAY_NODES = 100
 
@@ -64,3 +67,12 @@ def plot_bipartite_nw(B):
     node_labels=dict([(i, str(i)) for i in range(n)] + [(i + n, str(i)) for i in range(n_)])
 #     print(node_labels)
     nx.draw(G, pos, with_labels=True, node_color=['yellow']*n + ['cyan']*n_, ax=ax, labels = node_labels)
+    
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python ≥ 2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise

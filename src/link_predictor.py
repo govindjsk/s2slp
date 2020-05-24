@@ -15,6 +15,8 @@ from sklearn.metrics import roc_auc_score
 from tqdm import tqdm, tqdm_notebook
 from utils import plot_bipartite_nw, incidence_to_hyperedges, get_bipartite_nbrs
 
+vertex_lp_scores = {}
+
 def get_auc_scores(df):
     algos = list(df.columns)
     algos.remove('label')
@@ -23,7 +25,10 @@ def get_auc_scores(df):
         auc_scores[a] = roc_auc_score(df['label'], df[a])
     return auc_scores
 
-def get_lp_scores(v, v_, nbrs, nbrs_):
+def get_lp_scores(v, v_, nbrs, nbrs_, mode='hyperedge'):
+    if mode == 'vertex':
+        if (v, v_) in vertex_lp_scores:
+            return vertex_lp_scores[(v, v_)]
     nbrs_v = set(nbrs.get(v, set())) # Subset of V'
     nbrs_v.discard(v_)
 
@@ -37,9 +42,34 @@ def get_lp_scores(v, v_, nbrs, nbrs_):
     for nv_ in nbrs_v_: # n_v_ is an element of V
         nbrs_nv_ = set(nbrs[nv_]) # Subset of V'
         nbrs_nbrs_v_.update(nbrs_nv_)
+    # Common Neighbors
     cn = nbrs_nbrs_v.intersection(nbrs_v_)
     cn_ = nbrs_nbrs_v_.intersection(nbrs_v)
-    scores = {'cn': len(cn), 'cn_': len(cn_), 'cn_mean': (len(cn)+len(cn_))/2}
+    cns, cns_ = len(cn), len(cn_)
+    cns_mean = (cns + cns_) / 2
+    
+    # Jaccard Coefficient
+    union_n = nbrs_nbrs_v.union(nbrs_v_)
+    union_n_ = nbrs_nbrs_v_.union(nbrs_v)
+    try:
+        jcs = cns / len(union_n)
+    except ZeroDivisionError:
+        jcs = 0.0
+    try:
+        jcs_ = cns_ / len(union_n_)
+    except ZeroDivisionError:
+        jcs_ = 0.0
+    jcs_mean = (jcs + jcs_) / 2
+    
+    # Adamic Adar
+    aas = np.sum([1/(1+np.log10(1 + len(nbrs.get(w, set())))) for w in cn])
+    aas_ = np.sum([1/(1+np.log10(1 + len(nbrs_.get(w_, set())))) for w_ in cn_])
+    aas_mean = (aas + aas_) / 2 
+    scores = {'cn': cns, 'cn_': cns_, 'cn_mean': cns_mean,
+              'jc': jcs, 'jc_': jcs_, 'jc_mean': jcs_mean,
+              'aa': aas, 'aa_': aas_, 'aa_mean': aas_mean}
+    if mode == 'vertex':
+        vertex_lp_scores[(v, v_)] = scores
     return scores
 
 
@@ -61,7 +91,7 @@ def predict_links(prepared_data_params):
     
     def calculate_lp_scores(pairs, labels):
         results = {}
-        for (v, v_), l in (list(zip(pairs, labels))):
+        for (v, v_), l in tqdm(list(zip(pairs, labels))):
             result = {}
             scores = get_lp_scores(v, v_, B_nbrs, B_nbrs_)
             result.update({'B_{}'.format(a): s for a, s in scores.items()})
@@ -83,7 +113,9 @@ def predict_links(prepared_data_params):
             results.update({(v, v_): result})
         df = pd.DataFrame(results).T
         return df
+    print('Calculating LP scores for train pairs...')
     train_df = calculate_lp_scores(train_pairs, train_labels)
+    print('Calculating LP scores for test pairs...')
     test_df = calculate_lp_scores(test_pairs, test_labels)
     
     
@@ -122,7 +154,7 @@ def init_args():
 def main():
     args = init_args()
     perf_results = get_perf_results(args.data_home, args.data_name, args.num_exp, args.silent)
-    print(perf_results)
+    print(perf_results.sort_values(['train', 'test'], ascending=False))
 
 if __name__ == '__main__':
     main()
